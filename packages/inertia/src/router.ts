@@ -4,7 +4,7 @@ import { hasFiles } from './files'
 import { objectToFormData } from './formData'
 import { default as Axios, AxiosResponse } from 'axios'
 import { hrefToUrl, mergeDataIntoQueryString, urlWithoutHash } from './url'
-import { ActiveVisit, GlobalEvent, GlobalEventNames, GlobalEventResult, LocationVisit, Method, Page, PageHandler, PageResolver, PendingVisit, PreserveStateOption, RequestPayload, VisitId, VisitOptions } from './types'
+import { ActiveVisit, ErrorBag, Errors, GlobalEvent, GlobalEventNames, GlobalEventResult, LocationVisit, Method, Page, PageHandler, PageProps, PageResolver, PendingVisit, PreserveStateOption, RequestPayload, VisitId, VisitOptions } from './types'
 import { fireBeforeEvent, fireErrorEvent, fireExceptionEvent, fireFinishEvent, fireInvalidEvent, fireNavigateEvent, fireProgressEvent, fireStartEvent, fireSuccessEvent } from './events'
 
 const isServer = typeof window === 'undefined'
@@ -321,7 +321,31 @@ export class Router {
 
       const pageResponse: Page = response.data
       if (only.length && pageResponse.component === this.page.component) {
-        pageResponse.props = { ...this.page.props, ...pageResponse.props }
+        const isObject = (item: any) => (item && typeof item === 'object' && !Array.isArray(item));
+        function mergeDeep<Object>(target: any, ...sources: Array<any>): Object {
+            if (!sources.length) return target;
+            const source = sources.shift();
+        
+            if (isObject(target) && isObject(source)) {
+                for (const key in source) {
+                    if (isObject(source[key])) {
+                        if (!target[key]) Object.assign(target, {
+                            [key]: {}
+                        });
+                        mergeDeep(target[key], source[key]);
+                    } else {
+                        Object.assign(target, {
+                            [key]: source[key]
+                        });
+                    }
+                }
+            }
+        
+            return mergeDeep(target, ...sources);
+        }
+
+        let tempProps = mergeDeep<PageProps & { errors: Errors & ErrorBag; }>(this.page.props, pageResponse.props);
+        pageResponse.props = { ...this.page.props, ...tempProps }
       }
       preserveScroll = this.resolvePreserveOption(preserveScroll, pageResponse) as boolean
       preserveState = this.resolvePreserveOption(preserveState, pageResponse)
@@ -395,6 +419,7 @@ export class Router {
         page.rememberedState = page.rememberedState || {}
         replace = replace || hrefToUrl(page.url).href === window.location.href
         replace ? this.replaceState(page) : this.pushState(page)
+        console.log('swapping page', page);
         this.swapComponent({ component, page, preserveState }).then(() => {
           if (!preserveScroll) {
             this.resetScrollPositions()

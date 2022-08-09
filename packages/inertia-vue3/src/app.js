@@ -48,7 +48,8 @@ export default {
         resolveComponent,
         swapComponent: async (args) => {
           component.value = markRaw(args.component)
-          page.value = args.page
+          console.log('replacing page', page.value);
+          page.value = Object.assign({}, args.page);
           key.value = args.preserveState ? key.value : Date.now()
         },
       })
